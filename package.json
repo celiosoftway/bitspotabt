@@ -1,0 +1,20 @@
+{
+  "name": "bitspot",
+  "version": "1.0.0",
+  "description": "BitSpot - Arbitragem Spot Híbrida CEX/DEX",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "monitor": "node src/core/monitor.js",
+    "bot": "node src/bot/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.10.0",
+    "dotenv": "^17.2.0",
+    "ethers": "^6.15.0",
+    "sequelize": "^6.37.7",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3"
+  }
+}
