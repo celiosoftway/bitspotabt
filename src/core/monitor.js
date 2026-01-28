@@ -22,7 +22,7 @@ const strategies = [
 let strategyIndex = 0;
 
 
-async function runMonitor(p_chamada) {
+async function runMonitor_OLD(p_chamada) {
   try {
 
     let bot = false;
@@ -115,7 +115,7 @@ async function runMonitor(p_chamada) {
     if (debug) { console.log("08 - Salvando snapshot") }
 
     // 3. Salvar Snapshot
-    if (!bot) {await Snapshot.create(result)};
+    if (!bot) { await Snapshot.create(result) };
 
     if (debug) { console.log("09 - Validando alerta Telegram") }
 
@@ -183,6 +183,11 @@ async function runMonitor(p_chamada) {
     const chainlinkPrice = await getUsdBrlPrice();
     const expectedBRL = amountUSDT * chainlinkPrice;
 
+    // preços unitários
+    const cexUnitPrice = bestCex.price;                 // BRL por USDT na compra
+    const dexUnitPrice = bestDex.value / amountUSDT;   // BRL por USDT na venda
+    const oracleTotalBRL = expectedBRL;
+
     validDex.forEach(d => {
       const unitPrice = d.value / amountUSDT;
       const deviation =
@@ -201,6 +206,169 @@ async function runMonitor(p_chamada) {
     console.error('Erro no monitor:', err.message);
   }
 }
+
+async function runMonitor(p_chamada) {
+  try {
+
+    let bot = false;
+    if (p_chamada === "bot") bot = true;
+
+    if (debug) console.log("01 - Iniciando monitoramento");
+
+    const exchangesConfig = await getConfig('exchanges');
+    const banca = await getConfig('banca');
+    const baseAmountBRL = banca.amountBRL;
+    const { minProfit, minPercent } = banca;
+
+    const strategy = strategies[strategyIndex];
+    let amountBRL = baseAmountBRL;
+
+    if (!bot) {
+      strategyIndex = (strategyIndex + 1) % strategies.length;
+      amountBRL = baseAmountBRL * strategy.factor;
+    }
+
+    console.log(`amountBRL: ${amountBRL} strategy.factor: ${strategy.factor} strategyIndex:${strategyIndex}`);
+
+    // ================= CEX =================
+
+    if (debug) console.log("02 - buscando preço CEX");
+
+    const cexPrices = [];
+    if (exchangesConfig.Binance) cexPrices.push({ name: 'Binance', price: await priceService.getBinancePrice() });
+    if (exchangesConfig.Mexc) cexPrices.push({ name: 'Mexc', price: await priceService.getMexcPrice() });
+    if (exchangesConfig.Bitget) cexPrices.push({ name: 'Bitget', price: await priceService.getBitgetPrice() });
+
+    const validCex = cexPrices.filter(c => c.price);
+    if (!validCex.length) return;
+
+    const bestCex = validCex.reduce((a, b) => a.price < b.price ? a : b);
+    const amountUSDT = amountBRL / bestCex.price;
+
+    // ================= DEX =================
+
+    if (debug) console.log("05 - Iniciando cotação DEX");
+
+    const dexQuotes = await Promise.all([
+      { name: 'ParaSwap', value: await priceService.getParaSwapQuote(amountUSDT) },
+      { name: 'KyberSwap', value: await priceService.getKyberQuote(amountUSDT) },
+      { name: 'Odos', value: await priceService.getOdosQuote(amountUSDT) }
+    ]);
+
+    const validDex = dexQuotes
+      .filter(d => d.value)
+      .map(d => ({
+        ...d,
+        profit: d.value - amountBRL,
+        percent: ((d.value - amountBRL) / amountBRL) * 100
+      }));
+
+    if (!validDex.length) return;
+
+    const bestDex = validDex.reduce((a, b) => a.value > b.value ? a : b);
+
+    // ================= ORACLE =================
+
+    if (debug) console.log("07 - Oracle");
+
+    const chainlinkPrice = await getUsdBrlPrice();
+
+    const cexUnitPrice = bestCex.price;
+    const dexUnitPrice = bestDex.value / amountUSDT;
+    const oracleTotalBRL = amountUSDT * chainlinkPrice;
+
+    const oracleDeviation =
+      ((dexUnitPrice - chainlinkPrice) / chainlinkPrice) * 100;
+
+    // ================= RESULT =================
+
+    const result = {
+      timestamp: new Date().toISOString(),
+
+      strategy: strategy.label,
+
+      // 🔑 capital
+      bancaBRL: baseAmountBRL,
+      amountBRL,
+
+      // 🔄 execução
+      exchange: bestCex.name,
+      amountUSDT: parseFloat(amountUSDT.toFixed(2)),
+
+      // 📤 DEX (mantido)
+      dexName: bestDex.name,
+      dexPrice: parseFloat(bestDex.value.toFixed(2)), // 👈 NÃO REMOVER
+
+      // ➕ novos campos
+      cexUnitPrice: parseFloat(cexUnitPrice.toFixed(4)),
+      dexUnitPrice: parseFloat(dexUnitPrice.toFixed(4)),
+      dexTotalBRL: parseFloat(bestDex.value.toFixed(2)),
+
+      oracleUnitPrice: parseFloat(chainlinkPrice.toFixed(4)),
+      oracleTotalBRL: parseFloat(oracleTotalBRL.toFixed(2)),
+      oracleDeviation: parseFloat(oracleDeviation.toFixed(2)),
+
+      // 📊 resultado
+      profit: parseFloat(bestDex.profit.toFixed(2)),
+      percent: parseFloat(bestDex.percent.toFixed(2))
+    };
+
+
+    // ================= SNAPSHOT =================
+
+    if (!bot) await Snapshot.create(result);
+
+    // ================= TELEGRAM =================
+
+    if (result.profit >= minProfit || result.percent >= minPercent && !bot) {
+
+      const msg =
+        `🚀 *Oportunidade Detectada!*
+
+🏦 Banca: R$ ${result.bancaBRL}
+🎯 Usado: R$ ${result.amountBRL}
+
+📥 ${result.amountUSDT} USDT na ${result.exchange}
+Unit: R$ ${result.cexUnitPrice}
+
+📤 ${result.dexName}
+Unit: R$ ${result.dexUnitPrice}
+Total: R$ ${result.dexTotalBRL}
+
+🔮 Oracle: R$ ${result.oracleUnitPrice}
+📐 Desvio: ${result.oracleDeviation}%
+
+💰 Lucro: R$ ${result.profit} (${result.percent}%)
+🕒 ${result.timestamp}`;
+
+      if (OWNER_ID && count === 0) await enviarMensagemTelegram(msg);
+
+      count = (count + 1) % 10;
+    }
+
+    // ================= LOGS =================
+
+    console.log(`\n💰 [${result.timestamp}] ${result.exchange} → ${result.dexName}`);
+    console.log(`Lucro: R$ ${result.profit} (${result.percent}%)`);
+    console.log(`Oracle desvio: ${result.oracleDeviation}%`);
+
+    console.log("\n📥 CEX");
+    validCex.sort((a, b) => a.price - b.price).forEach(c => {
+      console.log(`  • ${c.name} R$ ${c.price.toFixed(4)}`);
+    });
+
+    console.log("\n📤 DEX");
+    validDex.sort((a, b) => b.value - a.value).forEach(d => {
+      console.log(`  • ${d.name} R$ ${d.value.toFixed(2)}`);
+    });
+
+    return result;
+
+  } catch (err) {
+    console.error('Erro no monitor:', err.message);
+  }
+}
+
 
 let intervalId = null;
 
