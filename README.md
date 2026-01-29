@@ -1,8 +1,10 @@
-# BitSpot - Arbitragem Spot Híbrida CEX/DEX
+# 🤖 BitSpot - Arbitragem Spot Híbrida CEX/DEX
+
+<img src="img/banner.png" align="middle">
 
 Projeto refatorado para arbitragem entre corretoras centralizadas (CEX) e descentralizadas (DEX).
 
-## Estrutura do Projeto
+## 🛠️ Estrutura do Projeto
 
 - `src/core/monitor.js`: Lógica principal de monitoramento e comparação de preços.
 - `src/services/`: Integrações com APIs de preços e serviços de blockchain.
@@ -10,7 +12,7 @@ Projeto refatorado para arbitragem entre corretoras centralizadas (CEX) e descen
 - `src/bot/`: Interface via Telegram.
 - `src/database/`: Configuração do SQLite com Sequelize.
 
-## Como Usar
+## ⚙️ Como Usar
 
 1.  Instale as dependências:
     ```bash
@@ -33,3 +35,4 @@ Projeto refatorado para arbitragem entre corretoras centralizadas (CEX) e descen
 - Implementar execução de ordens na Binance via API.
 - Implementar Swaps automáticos via ParaSwap/Kyber/Odos usando `ethers.js`.
 - Adicionar comandos de execução manual no Bot.
+- Implementar automação
