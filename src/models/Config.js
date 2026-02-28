@@ -1,6 +1,8 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database');
 
+(async() => {await sequelize.sync();})()
+
 const Config = sequelize.define('Config', {
   key: {
     type: DataTypes.STRING,

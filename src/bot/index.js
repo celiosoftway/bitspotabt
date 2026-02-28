@@ -1,15 +1,16 @@
 require('dotenv').config();
 const { Telegraf, Scenes, session, Markup } = require("telegraf");
-const { getConfig, setConfig } = require('../services/configService');
-const { runMonitor } = require('../core/monitor');
+const { getConfig } = require('../services/configService');
 
 const { enviarMensagemTelegram } = require('../utils/util');
 const { getLastCycleMessage, getBestLastHourMessage, getLast24hSummaryMessage } = require("../services/historyService");
+const { metricsHandler,cotacaoHandler } = require('./handlers');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const OWNER_ID = parseInt(process.env.OWNER_ID);
 
 const defineBancaScene = require("./defineBanca");
+
 const stage = new Scenes.Stage([
   defineBancaScene,
 ]);
@@ -27,30 +28,14 @@ bot.use(async (ctx, next) => {
 
 bot.start((ctx) => {
   ctx.reply('🤖 BitSpot Bot Ativo!', Markup.keyboard([
-    ['📊 Cotação', '💰 Saldo'],
-    ['⚙️ Configurações', '💸 Banca'],
-    ['📈 Histórico']
+    ['🔍 Cotação', '💰 Saldo'],
+    ['⚙️ Configurações', '💸 Config. Banca'],
+    ['📈 Histórico','📊 ROI']
   ]).resize());
 });
 
-bot.hears('📊 Cotação', async (ctx) => {
-  ctx.reply(`⏳ Realizando cotação...`);
-
-  const result = await runMonitor("bot");
-
-  if (!result) {
-    ctx.reply('❌ Nenhum dado retornado');
-    return;
-  }
-
-  let mensagem = `📅 ${result.timestamp} Banca ${result.amountBRL} BRL\n\n`;
-  mensagem += `💰 Lucro bruto (BRL): ${result.profit}\n`;
-  mensagem += `📊 Lucro percentual (%): ${result.percent}\n\n`;
-  mensagem += `🟢 Compre ${result.amountUSDT} USDT na ${result.exchange}\n`;
-  mensagem += `🔁 Venda na ${result.dexName} por ${result.dexPrice.toFixed(4)}\n`;
-
-  ctx.reply(mensagem);
-});
+bot.hears('🔍 Cotação', cotacaoHandler);
+bot.hears('📊 ROI',metricsHandler);
 
 bot.hears('⚙️ Configurações', async (ctx) => {
   const banca = await getConfig('banca');
@@ -63,7 +48,7 @@ bot.hears('⚙️ Configurações', async (ctx) => {
 });
 
 // define as configurações de banca
-bot.hears("💸 Banca", (ctx) => ctx.scene.enter("defineBancaScene"));
+bot.hears("💸 Config. Banca", (ctx) => ctx.scene.enter("defineBancaScene"));
 bot.action("defineBancaAction", (ctx) => ctx.scene.enter("defineBancaScene"));
 
 // exibe saldo da carteira e da exchange
