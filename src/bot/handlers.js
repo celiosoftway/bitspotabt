@@ -1,5 +1,8 @@
+require('dotenv').config();
+const { Telegraf, Scenes, session, Markup } = require("telegraf");
 const metricsService = require('../services/simulation.metrics.service');
 const { runMonitor } = require('../core/monitor');
+const { getConfig } = require('../services/configService');
 
 async function metricsHandler(ctx) {
 
@@ -8,7 +11,7 @@ async function metricsHandler(ctx) {
     const metrics7d = await metricsService.getConsolidatedMetrics('7d');
     const metrics30d = await metricsService.getConsolidatedMetrics('30d');
 
-    let msg = `Resultados das operações do 🤖 BitSpot Cex/Dex\n\n`
+    let msg = `Resultados das operações 🤖 BitSpot\n\n`
     msg += `📊 Hoje\n`
     msg += `Operações: ${metricsToday.operations}\n`;
     msg += `Lucro Líquido: R$ ${metricsToday.lucroLiquido}\n`;
@@ -58,7 +61,45 @@ async function cotacaoHandler(ctx) {
     ctx.reply(mensagem);
 }
 
+async function saldoHandler(ctx) {
+    const { getBalances } = require('../services/walletService');
+    const balances = await getBalances();
+
+    if (!balances) {
+        return ctx.reply('❌ Carteira não configurada no .env');
+    }
+
+    const msg = `💰 *Saldos na Polygon*\n\n` +
+        `👛 Endereço: \`${balances.address}\`\n` +
+        `💵 USDT: ${balances.USDT}\n` +
+        `🇧🇷 BRLA: ${balances.BRLA}\n` +
+        `🟣 MATIC: ${balances.MATIC}`;
+
+    ctx.reply(msg, { parse_mode: 'Markdown' });
+}
+
+async function configHandler(ctx) {
+    const banca = await getConfig('banca');
+    const msg = `⚙️ *Configurações Atuais*\n\n` +
+        `💵 Banca: R$ ${banca.amountBRL}\n` +
+        `🎯 Lucro Mínimo: R$ ${banca.minProfit}\n` +
+        `📊 Percentual Mínimo: ${banca.minPercent}%`;
+
+    ctx.reply(msg, { parse_mode: 'Markdown' });
+}
+
+async function historicoHandler(ctx) {
+    return ctx.reply("⚙️ Escolha a opção desejada:", Markup.inlineKeyboard([
+        [Markup.button.callback("Ultimo ciclo", "hist_ciclo")],
+        [Markup.button.callback("Ultima hora", "hist_1hora")],
+        [Markup.button.callback("Ultimas 24 horas", "hist_24horas")],
+    ]));
+}
+
 module.exports = {
     metricsHandler,
-    cotacaoHandler
+    cotacaoHandler,
+    saldoHandler,
+    configHandler,
+    historicoHandler
 };
