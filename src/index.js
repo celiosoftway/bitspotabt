@@ -3,6 +3,8 @@ const { initConfig } = require('./services/configService');
 const { startMonitoring } = require('./core/monitor');
 const { startBot } = require('./bot');
 
+const { startMonitoringIp } = require("./services/ip/monitoring");
+
 async function main() {
   try {
     console.log('Iniciando BitSpot...');
@@ -20,6 +22,9 @@ async function main() {
 
     // Iniciar Monitoramento
     startMonitoring();
+
+    // monitora o IP
+    startMonitoringIp();
 
   } catch (err) {
     console.error('Erro ao iniciar aplicação:', err);
