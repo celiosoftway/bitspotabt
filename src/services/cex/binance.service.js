@@ -4,8 +4,8 @@ const axios = require("axios");
 const crypto = require("crypto");
 
 const BASE_URL = "https://api.binance.com";
-const API_KEY = process.env.BINANCE_APIKEY;
-const API_SECRET = process.env.BINANCE_SECRETKEY;
+const API_KEY = process.env.BINANCE_API_KEY;
+const API_SECRET = process.env.BINANCE_API_SECRET;
 
 function sign(query) {
   return crypto
@@ -36,6 +36,7 @@ async function getBalance(asset) {
 
   return coin ? parseFloat(coin.free) : 0;
 }
+
 
 async function buyMarket({ symbol, quoteAmount }) {
 
@@ -127,9 +128,31 @@ async function withdraw({ asset, network, amount, address }) {
   return res.data;
 }
 
+async function getWithdrawStatus(withdrawId) {
+  const timestamp = await getServerTime();
+
+  const params = new URLSearchParams({
+    withdrawOrderId: withdrawId,
+    timestamp: timestamp.toString(),
+  });
+
+  const signature = sign(params.toString());
+  params.append("signature", signature);
+
+  const res = await axios.get(
+    `${BASE_URL}/sapi/v1/capital/withdraw/history?${params}`,
+    {
+      headers: { "X-MBX-APIKEY": API_KEY },
+    }
+  );
+
+  return res.data;
+}
+
 module.exports = {
   getBalance,
   buyMarket,
   sellMarket,
-  withdraw
+  withdraw,
+  getWithdrawStatus
 };

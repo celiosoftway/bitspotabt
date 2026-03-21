@@ -1,12 +1,25 @@
+
+/*
+    MonitorV2 - Evolução do monitor para incluir o processo completo de compra na CEX, saque, e venda na DEX  
+    simula um delay de 10 minutos para o saque, e valida o lucro após o saque para só então executar a venda na DEX
+     - checkEntryOpportunity: busca oportunidade de arbitragem e cria ordem com status "WITHDRAW_PENDING"
+     - checkWithdrawCompletion: simula o recebimento do saque após 10 minutos, atualiza a ordem para "WAITING_DEX"
+     - checkExitOpportunity: busca oportunidade de venda na DEX, se lucro for positivo, executa a venda e atualiza a ordem para "EXECUTED"  
+*/
+
 const { getConfig } = require('../services/configService');
 const priceService = require('../services/priceService');
 const { enviarMensagemTelegram } = require('../utils/util');
 const Order = require('../models/Order');
 
+const { getUsdBrlPrice } = require('../services/oracleService');
+
 require('dotenv').config();
-const WITHDRAW_DELAY_MIN = 10;
+const WITHDRAW_DELAY_MIN = 1;
 const CHECK_INTERVAL = 60000;
 let activeOrder = null;
+let bestquotes;
+const MAX_ORACLE_DEVIATION = 0.6; // %
 
 function log(msg) {
     console.log(`[${new Date().toISOString()}] ${msg}`);
@@ -33,6 +46,57 @@ async function getBestCexPrice(exchangesConfig) {
 
 async function getBestDexQuote(amountUSDT) {
 
+    const oraclePrice = await getUsdBrlPrice();
+    bestquotes = `\nOracle price: ${oraclePrice.toFixed(4)} BRL\n`;
+
+    const quotesRaw = await Promise.all([
+        priceService.getParaSwapQuote(amountUSDT),
+        priceService.getKyberQuote(amountUSDT),
+        priceService.getOdosQuote(amountUSDT)
+    ]);
+
+    const quotes = [
+        { name: 'ParaSwap', value: quotesRaw[0] },
+        { name: 'Kyber', value: quotesRaw[1] },
+        { name: 'Odos', value: quotesRaw[2] }
+    ].filter(q => q.value);
+
+    if (!quotes.length) return null;
+
+    const validQuotes = [];
+
+    for (const q of quotes) {
+
+        const dexUnitPrice = q.value / amountUSDT;
+
+        bestquotes += `${q.name} quote: ${dexUnitPrice.toFixed(4)} BRL\n`;
+
+        const deviation =
+            ((dexUnitPrice - oraclePrice) / oraclePrice) * 100;
+
+        if (Math.abs(deviation) > MAX_ORACLE_DEVIATION) {
+
+            log(`DEX descartada ${q.name} | dev ${deviation.toFixed(2)}%`);
+            continue;
+        }
+
+        validQuotes.push(q);
+    }
+
+    if (!validQuotes.length) {
+
+        log("Todas DEX descartadas pelo oracle");
+        return null;
+    }
+
+    return validQuotes.reduce((a, b) =>
+        a.value > b.value ? a : b
+    );
+}
+
+/*
+async function getBestDexQuote(amountUSDT) {
+
     const quotesRaw = await Promise.all([
         priceService.getParaSwapQuote(amountUSDT),
         priceService.getKyberQuote(amountUSDT),
@@ -51,13 +115,15 @@ async function getBestDexQuote(amountUSDT) {
     return valid.reduce((a, b) => a.value > b.value ? a : b);
 }
 
+*/
+
 async function checkEntryOpportunity() {
 
     const exchangesConfig = await getConfig('exchanges');
     const banca = await getConfig('banca');
 
     const { amountBRL, minProfit } = banca;
-    console.log("minProfit", minProfit);
+   // console.log("minProfit", minProfit);
 
     const bestCex = await getBestCexPrice(exchangesConfig);
     if (!bestCex) return;
@@ -65,11 +131,17 @@ async function checkEntryOpportunity() {
     const amountUSDT = amountBRL / bestCex.price;
 
     const bestDex = await getBestDexQuote(amountUSDT);
-    console.log("bestDex", bestDex);
-    if (!bestDex) return;
+    // if (!bestDex) return;
 
     const profit = bestDex.value - amountBRL;
-    console.log("profit", profit);
+    // if (profit < minProfit) return;
+
+    bestquotes += `CEX: ${bestCex.name} | price: ${bestCex.price.toFixed(4)} BRL\n`;
+    bestquotes += `Total obtido: ${bestDex.name} | price: ${bestDex.value.toFixed(4)} BRL\n`;
+    bestquotes += `Lucro: ${profit.toFixed(2)} BRL\n`;
+    console.log(bestquotes);
+
+    if (!bestDex) return;
     if (profit < minProfit) return;
 
     log(`🚀 OPORTUNIDADE DETECTADA`);
@@ -222,7 +294,7 @@ async function restoreActiveOrder() {
 
 async function runMonitor() {
     // EVOLUÇÃO EM PRODUÇÃO: ADICIONAR UMA NOVA FUNÇÃO PARA VERIFICAR O SALDO NAS EXCHANGES HABILITADAS
- 
+
     try {
 
         if (!activeOrder) {

@@ -1,19 +1,18 @@
 const { getConfig } = require('../services/configService');
 const priceService = require('../services/priceService');
 const Snapshot = require('../models/Snapshot');
-const { Telegraf } = require('telegraf');
 require('dotenv').config();
 
-// const bot = new Telegraf(process.env.BOT_TOKEN);
 const OWNER_ID = process.env.OWNER_ID;
-
 const { enviarMensagemTelegram } = require('../utils/util');
+
 const { getUsdBrlPrice } = require('../services/oracleService');
 const simulationService = require('../services/simulation.service');
 
 const debug = true;
 let count = 0;
 
+// evolução: adicionar estrategia configuravel.
 const strategies = [
   { label: 100, factor: 1 }
   // { label: 75, factor: 0.75 },
