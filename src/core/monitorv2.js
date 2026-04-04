@@ -6,20 +6,20 @@
      - checkWithdrawCompletion: simula o recebimento do saque após 10 minutos, atualiza a ordem para "WAITING_DEX"
      - checkExitOpportunity: busca oportunidade de venda na DEX, se lucro for positivo, executa a venda e atualiza a ordem para "EXECUTED"  
 */
+require('dotenv').config();
 
 const { getConfig } = require('../services/configService');
 const priceService = require('../services/priceService');
 const { enviarMensagemTelegram } = require('../utils/util');
 const Order = require('../models/Order');
-
 const { getUsdBrlPrice } = require('../services/oracleService');
 
-require('dotenv').config();
-const WITHDRAW_DELAY_MIN = 1;
-const CHECK_INTERVAL = 60000;
+const WITHDRAW_DELAY_MIN = Number(process.env.WITHDRAW_DELAY_MIN) || 5;
+const CHECK_INTERVAL = Number(process.env.CHECK_INTERVAL) || 60000;
+const MAX_ORACLE_DEVIATION = Number(process.env.MAX_ORACLE_DEVIATION) || 0.6;
+
 let activeOrder = null;
 let bestquotes;
-const MAX_ORACLE_DEVIATION = 0.6; // %
 
 function log(msg) {
     console.log(`[${new Date().toISOString()}] ${msg}`);
@@ -169,7 +169,7 @@ async function checkEntryOpportunity() {
 
     log(`Ordem aberta`);
     log(`Compra CEX: ${amountUSDT.toFixed(2)} USDT`);
-    log(`Aguardando saque 10 minutos`);
+    log(`Aguardando saque ${WITHDRAW_DELAY_MIN} minutos`);
 
     const order = await Order.create({
 

@@ -1,3 +1,5 @@
+// C:\dev\arbitragem\bitspotabt\src\cex.js
+
 const { getBalance, buyMarket, withdraw, getWithdrawStatus } = require("./services/cex/binance.service");
 
 async function test() {
@@ -17,7 +19,7 @@ async function test() {
         //compra de USDT usando BRL
         // await buyMarket({ symbol: "USDTBRL", quoteAmount: 100 });
 
-        /*
+      
         const withdrawResult = await withdraw({
             asset: "USDT",
             network: "MATIC",
@@ -26,10 +28,11 @@ async function test() {
         });
 
         console.log("Resultado do saque:", withdrawResult);
-        */
-
+        
+/*
         const withdrawStatus = await getWithdrawStatus("406d1511bb0e4e1fb0696d16ca9379df");
         console.log("Status do saque:", withdrawStatus);
+        */
 
     } catch (error) {
         console.error("Erro:", error.response ? error.response.data : error.message);
