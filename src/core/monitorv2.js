@@ -118,6 +118,7 @@ async function getBestDexQuote(amountUSDT) {
 */
 
 async function checkEntryOpportunity() {
+    log("🔎 Verificando oportunidade de entrada...");
 
     const exchangesConfig = await getConfig('exchanges');
     const banca = await getConfig('banca');
